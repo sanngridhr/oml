@@ -1,0 +1,82 @@
+(* Constraints outside the grammar:
+   1. word must not equal a keyword.
+   2. operator must not equal a reserved-op.
+   3. Open forms (let-in, if, match, lambda) extend as far right as possible,
+      so a nested unparenthesized match takes the following arms.
+   4. Whitespace separates tokens. List [ ... ], dict { ... } and tuple
+      ( ... ) literals, and tuple types, are padded with whitespace inside;
+      every other round bracket (expressions, let-args, type groups) is tight
+      against its contents. (), [] and {} are single tokens. A comma may touch
+      its neighbours. An opening bracket must follow whitespace, another
+      opening bracket, or a comma; a closing bracket must precede whitespace,
+      another closing bracket, or a comma. String and char literals are
+      lexed first.
+   5. Infix chains are flat; associativity and precedence come from a fixity
+      table ($ and :: and ^ right-associative, $ lowest).
+   6. Dict patterns match any dict containing the listed keys; explicit dict
+      entries win over a trailing spread. *)
+
+syntax       = [ws] statement { ws statement } [ws] .
+statement    = ("let" ws unit ws "=" ws expression | binding) ws ";;" .
+
+binding      = "let" ws ["rec" ws] word {let-arg} [annotation] ws "=" ws expression .
+let-arg      = ws (word | "(" word annotation ")") .
+
+annotation   = ws ":" ws type .
+type         = type-app [ws "->" ws type] .
+type-app     = type-atom {ws word} .
+type-atom    = word | "'" word | tuple-type | "(" type ")" .
+tuple-type   = "(" ws type type-item {type-item} ws ")" .
+type-item    = [ws] "," [ws] type .
+
+expression   = compound | expr-arg .
+compound     = let-in | if-expr | match-expr | lambda | infix-expr | application .
+
+let-in       = binding ws "in" ws expression .
+if-expr      = "if" ws expression ws "then" ws expression ws "else" ws expression .
+match-expr   = "match" ws expression ws match-item {ws match-item} .
+match-item   = "|" ws expression ws "=>" ws expression .
+lambda       = "fun" {ws word} ws "->" ws expression .
+
+infix-expr   = operand ws operator ws operand {ws operator ws operand} .
+operand      = application | expr-arg .
+application  = function ws expr-arg {ws expr-arg} .
+function     = word | paren-expr .
+expr-arg     = word | literal | list | tuple | dict | paren-expr .
+paren-expr   = "(" compound ")" .
+
+operator     = op-char {op-char} .
+
+literal      = char | string | number | unit | atom .
+char         = "\'" UTF-8 "\'" .
+string       = "\"" {UTF-8} "\"" .
+number       = ["-"] ( digit {digit} ["." {digit}] | "." digit {digit} ) .
+unit         = "()" .
+atom         = "#" word .
+
+list         = "[]" | "[" ws expression {list-item} ws "]" .
+list-item    = [ws] "," [ws] expression .
+
+tuple        = "(" ws expression list-item {list-item} ws ")" .
+
+dict         = "{}" | "{" ws dict-body ws "}" .
+dict-body    = dict-entry {dict-item} [dict-rest] | dict-spread .
+dict-entry   = expression ws "=>" ws expression .
+dict-item    = [ws] "," [ws] dict-entry .
+dict-rest    = [ws] "," [ws] dict-spread .
+dict-spread  = ".." ws expression .
+
+keyword      = "let" | "rec" | "in" | "if" | "then" | "else" | "match" | "fun" .
+reserved-op  = "=" | "|" | "->" | "=>" | ":" | ".." .
+
+character    = letter | digit | "_" | "-" | ">" .
+word         = (letter | "_") [{character} (letter | digit | "'")] .
+
+letter       = uppercase | lowercase .
+uppercase    = "A".."Z" | "А".."Я" .
+lowercase    = "a".."z" | "а".."я" .
+digit        = "0".."9" .
+op-char      = "!" | "$" | "%" | "&" | "*" | "+" | "-" | "." | "/" | ":" | "<" | ">" | "=" | "?" | "^" | "|" .
+
+ws-char      = " " | "\n" | "\t" | "\r" .
+ws           = ws-char {ws-char} .
