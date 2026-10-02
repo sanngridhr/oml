@@ -1,3 +1,5 @@
+mod token;
+
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -5,20 +7,14 @@ use std::{
 };
 
 use regex::{Matches, Regex};
+use token::{ASTNode, classify};
 
-#[derive(Debug)]
-pub struct ASTNode {
-    word: String
-}
-
-pub fn lex(code: String) -> Vec<ASTNode> {
-    return prepare(code).iter().map(|w| classify(w).unwrap()).collect();
-}
-
-fn classify(word: &String) -> Result<ASTNode, String> {
-    return match word.as_str() {
-        _ => Ok(ASTNode { word: word.to_string() }),
-    };
+pub(crate) fn lex(code: String) -> Vec<ASTNode> {
+    return words(code)
+        .iter()
+        .filter(|w: &&String| w != &"")
+        .map(|w: &String| classify(w))
+        .collect();
 }
 
 struct CodeWithStrings {
@@ -26,7 +22,7 @@ struct CodeWithStrings {
     strings: HashMap<String, String>,
 }
 
-fn prepare(code: String) -> Vec<String> {
+fn words(code: String) -> Vec<String> {
     let re_comments: Regex = Regex::new(r"\(\*.*?\*\)").unwrap();
     let commented: Cow<'_, str> = re_comments.replace_all(&code, "");
 
@@ -36,7 +32,7 @@ fn prepare(code: String) -> Vec<String> {
         strings,
     } = hash_strings(commented.to_string(), &mut hasher);
 
-    let re_pad: Regex = Regex::new(r"\(\)|\{\}|\[\]|[(){}\[\]]").unwrap();
+    let re_pad: Regex = Regex::new(r"\(\)|\{\}|\[\]|[(){}\[\],]").unwrap();
     let padded: Cow<'_, str> = re_pad.replace_all(&stringed, " $0 ");
 
     let re_split: Regex = Regex::new(r"\s+").unwrap();
