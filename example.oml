@@ -40,6 +40,8 @@ let () =
        | (темп, опис) => print-line $ float->string темп ^ " °C: " ^ опис)
     (map описати $ температури виміри) ;;
 
+let () = print-line "Фаренгейти: (* Перевірка на неправильний токен *)
+
 let () =
   ignore $ map
     (fun темп -> print-line $ float->string темп ^ " °F")

@@ -1,73 +1,38 @@
 mod token;
 
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-};
-
-use regex::{Matches, Regex};
+use regex::Regex;
+use std::sync::LazyLock;
 use token::{ASTNode, classify};
 
-pub(crate) fn lex(code: String) -> Vec<ASTNode> {
-    return words(code)
-        .iter()
-        .filter(|w: &&String| w != &"")
-        .map(|w: &String| classify(w))
-        .collect();
-}
+// Each part is one kind of token. Order matters: earlier parts win.
+const COMMENT: &str = r"(?s:\(\*.*?\*\))"; // (* ... *), may span lines
+const STRING: &str = r#""(?:[^"\\\n]|\\[^\n])*""#; // "..." with \" escapes, may be empty
+const EMPTY_BRACKETS: &str = r"\(\)|\{\}|\[\]"; // (), {}, []
+const BRACKET: &str = r"[(){}\[\],]"; // single brackets and comma
+const WORD: &str = r#"[^\s(){}\[\],"]+"#; // anything else up to a separator
+const FALLBACK: &str = r"\S"; // stray character, e.g. a lone "
 
-struct CodeWithStrings {
-    code: String,
-    strings: HashMap<String, String>,
-}
+static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
+    let pattern = [COMMENT, STRING, EMPTY_BRACKETS, BRACKET, WORD, FALLBACK].join("|");
+    Regex::new(&pattern).unwrap()
+});
 
-fn words(code: String) -> Vec<String> {
-    let re_comments: Regex = Regex::new(r"\(\*.*?\*\)").unwrap();
-    let commented: Cow<'_, str> = re_comments.replace_all(&code, "");
-
-    let mut hasher: DefaultHasher = DefaultHasher::new();
-    let CodeWithStrings {
-        code: stringed,
-        strings,
-    } = hash_strings(commented.to_string(), &mut hasher);
-
-    let re_pad: Regex = Regex::new(r"\(\)|\{\}|\[\]|[(){}\[\],]").unwrap();
-    let padded: Cow<'_, str> = re_pad.replace_all(&stringed, " $0 ");
-
-    let re_split: Regex = Regex::new(r"\s+").unwrap();
-    let split: Vec<String> = re_split
-        .split(&padded)
-        .map(|s: &str| {
-            if strings.contains_key(&s.to_string()) {
-                strings.get(&s.to_string()).unwrap().to_owned()
-            } else {
-                s.to_string()
-            }
+pub(crate) fn lex(code: &str, file: &str) -> Result<Vec<ASTNode>, String> {
+    RE_TOKEN
+        .find_iter(code)
+        .filter(|m: &regex::Match<'_>| !m.as_str().starts_with("(*"))
+        .map(|m: regex::Match<'_>| {
+            classify(m.as_str()).map_err(|e| {
+                let (line, col) = line_col(code, m.start());
+                format!("{e} at {file}:{line}:{col}")
+            })
         })
-        .collect();
-    return split;
+        .collect()
 }
 
-fn hash_strings(code: String, hasher: &mut DefaultHasher) -> CodeWithStrings {
-    let mut code_clone: String = code.clone();
-    let mut strings: HashMap<String, String> = HashMap::new();
-
-    let re_strings: Regex = Regex::new("\".+?\"").unwrap();
-    let matches: Matches<'_, '_> = re_strings.find_iter(&code);
-
-    for m in matches {
-        let s: &str = m.as_str();
-
-        let _: () = s.hash(hasher);
-        let hash: String = hasher.finish().to_string();
-
-        code_clone = code_clone.replace(s, &hash);
-        strings.insert(hash.to_string(), s.to_string());
-    }
-
-    return CodeWithStrings {
-        code: code_clone,
-        strings,
-    };
+fn line_col(code: &str, offset: usize) -> (usize, usize) {
+    let before = &code[..offset];
+    let line = before.matches('\n').count() + 1;
+    let col = before.rsplit('\n').next().unwrap().chars().count() + 1;
+    (line, col)
 }

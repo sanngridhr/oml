@@ -7,8 +7,8 @@ fn main() {
         .skip(1)
         .next()
         .unwrap_or_else(|| panic!("File to be parsed was not provided"));
-    let code: String = read_to_string(path).unwrap();
+    let code: String = read_to_string(&path).unwrap();
 
-    let tokens = lexer::lex(code);
+    let tokens: Vec<_> = lexer::lex(&code, &path).unwrap();
     println!("{:?}", tokens);
 }
