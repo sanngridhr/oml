@@ -29,7 +29,7 @@ type-app     = type-atom {ws type-name} .
 type-atom    = type-name | tuple-type | "(" [ws] type [ws] ")" .
 tuple-type   = "(" [ws] type type-item {type-item} [ws] ")" .
 type-item    = [ws] "," [ws] type .
-type-name    = ["'"] letter {alphanumeric}
+type-name    = ["'"] letter {letter}
 
 expression   = compound | expr-arg .
 compound     = let-in | if-expr | match-expr | lambda | infix-expr | application .
@@ -77,9 +77,7 @@ character    = letter | digit | "_" | "-" | ">" .
 identifier   = (letter | "_") [{character} (letter | digit | "'")] .
 
 alphanumeric = letter | digit .
-letter       = uppercase | lowercase .
-uppercase    = "A".."Z" | "А".."Я" .
-lowercase    = "a".."z" | "а".."я" .
+letter       = UTF-8-alphabetic .
 digit        = "0".."9" .
 op-char      = "!" | "$" | "%" | "&" | "*" | "+" | "-" | "." | "/" | ":" | "<" | ">" | "=" | "?"
              | "^" | "|" .
