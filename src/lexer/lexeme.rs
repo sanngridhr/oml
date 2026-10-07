@@ -1,4 +1,7 @@
-use std::str::{Chars};
+use std::{
+    num::{ParseFloatError, ParseIntError},
+    str::Chars,
+};
 
 #[derive(Debug)]
 pub(crate) enum Lexeme<'src> {
@@ -86,8 +89,14 @@ pub(crate) fn classify(word: &str) -> Result<Lexeme<'_>, String> {
         _ if { is_atom(word) } => Lexeme::Atom(word),
         _ if { is_string(word) } => Lexeme::String(&word[1..word.len() - 1]),
         _ if { is_char(word) } => Lexeme::Char(word.chars().nth(1).unwrap()),
-        _ if { is_floating(word) } => Lexeme::Floating(word.parse::<f64>().unwrap()),
-        _ if { is_integer(word) } => Lexeme::Integer(word.parse::<i64>().unwrap()),
+        _ if { is_floating(word) } => Lexeme::Floating(
+            word.parse::<f64>()
+                .map_err(|e: ParseFloatError| format!("Invalid floating literal `{word}`: {e}"))?,
+        ),
+        _ if { is_integer(word) } => Lexeme::Integer(
+            word.parse::<i64>()
+                .map_err(|e: ParseIntError| format!("Invalid integer literal `{word}`: {e}"))?,
+        ),
 
         // Identifiers
         _ if { is_typevar(word) } => Lexeme::TypeVar(word),
@@ -147,7 +156,9 @@ fn is_operator(word: &str) -> bool {
 fn is_identifier(word: &str) -> bool {
     let mut chars: Chars<'_> = word.chars();
 
-    let Some(first) = chars.next() else { return false };
+    let Some(first) = chars.next() else {
+        return false;
+    };
     let last: Option<char> = chars.next_back();
 
     (first.is_alphabetic() || first == '_')

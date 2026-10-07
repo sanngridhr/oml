@@ -1,7 +1,7 @@
 pub(crate) mod lexeme;
 
 use lexeme::{Lexeme, classify};
-use regex::Regex;
+use regex::{Match, Regex};
 use std::sync::LazyLock;
 
 // Each part is one kind of token. Order matters: earlier parts win.
@@ -27,17 +27,26 @@ static RE_TOKEN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&pattern).unwrap()
 });
 
-pub(crate) fn lex<'src>(code: &'src str, file: Option<&str>) -> Result<Vec<Lexeme<'src>>, String> {
-    RE_TOKEN
+pub(crate) fn lex<'src>(
+    code: &'src str,
+    file: Option<&str>,
+) -> Result<Vec<Lexeme<'src>>, Box<[String]>> {
+    let (oks, errs): (Vec<_>, Vec<_>) = RE_TOKEN
         .find_iter(code)
-        .filter(|m: &regex::Match<'_>| !m.as_str().starts_with("(*"))
-        .map(|m: regex::Match<'_>| {
-            classify(m.as_str()).map_err(|e: String| {
+        .filter(|m| !m.as_str().starts_with("(*"))
+        .map(|m| {
+            classify(m.as_str()).map_err(|e| {
                 let (line, col) = line_col(code, m.start());
                 format!("{e} at {}:{line}:{col}", file.unwrap_or_default())
             })
         })
-        .collect()
+        .partition(Result::is_ok);
+
+    if errs.is_empty() {
+        Ok(oks.into_iter().map(Result::unwrap).collect())
+    } else {
+        Err(errs.into_iter().map(Result::unwrap_err).collect())
+    }
 }
 
 fn line_col(code: &str, offset: usize) -> (usize, usize) {
