@@ -1,9 +1,9 @@
-use std::{
-    num::{ParseFloatError, ParseIntError},
-    str::Chars,
-};
+use std::str::Chars;
+
+use crate::lexer::error::LexingErrorKind;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) enum Lexeme<'src> {
     // Keywords
     Fun,
@@ -39,7 +39,7 @@ pub(crate) enum Lexeme<'src> {
     EmptyDict,
     EmptyList,
     Floating(f64),
-    Integer(i64),
+    Integer(i32),
     String(&'src str),
     Unit,
 
@@ -47,12 +47,9 @@ pub(crate) enum Lexeme<'src> {
     Identifier(&'src str),
     Operator(&'src str),
     TypeVar(&'src str),
-
-    // Errors
-    Unrecognised(&'src str),
 }
 
-pub(crate) fn classify(word: &str) -> Result<Lexeme<'_>, String> {
+pub(super) fn classify(word: &str) -> Result<Lexeme<'_>, LexingErrorKind> {
     let node: Lexeme = match word {
         // Keywords
         "fun" => Lexeme::Fun,
@@ -89,28 +86,24 @@ pub(crate) fn classify(word: &str) -> Result<Lexeme<'_>, String> {
         _ if { is_atom(word) } => Lexeme::Atom(word),
         _ if { is_string(word) } => Lexeme::String(&word[1..word.len() - 1]),
         _ if { is_char(word) } => Lexeme::Char(word.chars().nth(1).unwrap()),
-        _ if { is_floating(word) } => Lexeme::Floating(
-            word.parse::<f64>()
-                .map_err(|e: ParseFloatError| format!("Invalid floating literal `{word}`: {e}"))?,
-        ),
+        _ if { is_floating(word) } => Lexeme::Floating(word.parse::<f64>().unwrap()),
         _ if { is_integer(word) } => Lexeme::Integer(
-            word.parse::<i64>()
-                .map_err(|e: ParseIntError| format!("Invalid integer literal `{word}`: {e}"))?,
+            word.parse::<i32>()
+                .map_err(|_| LexingErrorKind::IntegerOverflow)?,
         ),
 
         // Identifiers
         _ if { is_typevar(word) } => Lexeme::TypeVar(word),
         _ if { is_operator(word) } => Lexeme::Operator(word),
-        _ if { is_identifier(word) } => Lexeme::Identifier(word), // Should be last
+        _ if { is_identifier(word) } => Lexeme::Identifier(word), // should be last
 
         // Errors
-        _ => Lexeme::Unrecognised(word),
+        "''" => Err(LexingErrorKind::EmptyChar)?,
+        _ if { word.starts_with('"') } => Err(LexingErrorKind::UnclosedString)?,
+        _ => Err(LexingErrorKind::Unrecognised)?, // should be last
     };
 
-    return match node {
-        Lexeme::Unrecognised(w) => Err(format!("Unrecognised token `{w}`")),
-        _ => Ok(node),
-    };
+    Ok(node)
 }
 
 fn is_atom(word: &str) -> bool {
@@ -159,9 +152,7 @@ fn is_identifier(word: &str) -> bool {
     let Some(first) = chars.next() else {
         return false;
     };
-    let last: Option<char> = chars.next_back();
 
     (first.is_alphabetic() || first == '_')
-        && chars.all(|c: char| c.is_alphabetic() || c.is_ascii_digit() || matches!(c, '-' | '>'))
-        && last.is_none_or(|c: char| c.is_alphabetic() || c.is_ascii_digit() || c == '\'')
+        && chars.all(|c: char| c.is_alphabetic() || c.is_ascii_digit() || "->".contains(c))
 }
