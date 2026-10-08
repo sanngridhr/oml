@@ -1,16 +1,18 @@
+use crate::macros::impl_into_u8;
 use std::ops::Range;
 
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 
 use crate::error::Diagnosable;
 
-#[derive(Debug)]
-pub(super) enum LexingErrorKind {
+#[derive(Debug, Clone, Copy)]
+pub enum LexingErrorKind {
     EmptyChar,
     IntegerOverflow,
     UnclosedString,
     Unrecognised,
 }
+impl_into_u8!(LexingErrorKind);
 
 impl LexingErrorKind {
     fn message(&self) -> &str {
@@ -41,10 +43,17 @@ pub(crate) struct LexingError {
 }
 
 impl Diagnosable for LexingError {
+    const CODE_PREFIX: &str = "LX";
+    type Kind = LexingErrorKind;
+
     fn to_diagnostic<FileId>(&self, file_id: FileId) -> Diagnostic<FileId> {
         Diagnostic::error()
             .with_message(self.kind.message())
             .with_label(Label::primary(file_id, self.span.clone()))
             .with_note(self.kind.note().unwrap_or_default())
+    }
+
+    fn kind(&self) -> Self::Kind {
+        self.kind
     }
 }

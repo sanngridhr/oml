@@ -1,6 +1,8 @@
 mod error;
 mod lexer;
+mod macros;
 
+use error::ToDiagnostics;
 use std::{env::args, fs::read_to_string, process::exit};
 
 use codespan_reporting::{
@@ -11,7 +13,6 @@ use codespan_reporting::{
         termcolor::{ColorChoice, StandardStream, StandardStreamLock},
     },
 };
-use error::FileErrors;
 
 fn main() {
     // codespan reporting setup
@@ -31,7 +32,7 @@ fn main() {
 
     // lexing
     let tokens_id: usize = files.add(name, source.clone());
-    let tokens: Vec<_> = lexer::lex(&source).unwrap_or_else(|errors: FileErrors<_>| {
+    let tokens: Box<[_]> = lexer::lex(&source).unwrap_or_else(|errors: Box<[_]>| {
         let mut out: StandardStreamLock<'_> = writer.lock();
         errors
             .to_diagnostics(tokens_id)
