@@ -24,13 +24,9 @@ impl LexingErrorKind {
         }
     }
 
-    fn note(&self) -> Option<String> {
+    fn note(&self) -> Option<&str> {
         match &self {
-            Self::IntegerOverflow => Some(format!(
-                "integer limits are {} ≤ x ≤ {}",
-                i32::MIN,
-                i32::MAX
-            )),
+            Self::IntegerOverflow => Some("integer limits are -2,147,483,648..2,147,483,647"),
             _ => None,
         }
     }
